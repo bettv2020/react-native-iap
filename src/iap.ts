@@ -21,7 +21,6 @@ import {
 import {
   Product,
   ProductPurchase,
-  ProductType,
   Purchase,
   PurchaseResult,
   RequestPurchase,
