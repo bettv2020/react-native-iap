@@ -26,12 +26,10 @@ type IAP_STATUS = {
   initConnectionError?: Error;
   finishTransaction: ({
     purchase,
-    isConsumable,
-    developerPayloadAndroid,
+    isConsumable
   }: {
     purchase: Purchase;
     isConsumable?: boolean;
-    developerPayloadAndroid?: string;
   }) => Promise<string | boolean | PurchaseResult | void>;
   getAvailablePurchases: () => Promise<void>;
   getPurchaseHistory: () => Promise<void>;
@@ -85,18 +83,15 @@ export const useIAP = (): IAP_STATUS => {
   const finishTransaction = useCallback(
     async ({
       purchase,
-      isConsumable,
-      developerPayloadAndroid,
+      isConsumable
     }: {
       purchase: Purchase;
       isConsumable?: boolean;
-      developerPayloadAndroid?: string;
     }): Promise<string | boolean | PurchaseResult | void> => {
       try {
         return await iapFinishTransaction({
           purchase,
-          isConsumable,
-          developerPayloadAndroid,
+          isConsumable
         });
       } catch (err) {
         throw err;

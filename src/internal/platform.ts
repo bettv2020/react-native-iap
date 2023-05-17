@@ -2,67 +2,15 @@ import {NativeModules, Platform} from 'react-native';
 
 import {ErrorCode} from '../purchaseError';
 
-const {RNIapIos, RNIapIosSk2, RNIapModule, RNIapAmazonModule} = NativeModules;
+const {RNIapIos, RNIapIosSk2, RNIapModule} = NativeModules;
 
 export const isIos = Platform.OS === 'ios';
-export const isAndroid = Platform.OS === 'android';
-export const isAmazon = isAndroid && !!RNIapAmazonModule;
-export const isPlay = isAndroid && !!RNIapModule;
-
-// Android
-
-let androidNativeModule = RNIapModule;
-
-export const setAndroidNativeModule = (
-  nativeModule: typeof RNIapModule,
-): void => {
-  androidNativeModule = nativeModule;
-};
-
-export const checkNativeAndroidAvailable = (): void => {
-  if (!RNIapModule && !RNIapAmazonModule) {
-    throw new Error(ErrorCode.E_IAP_NOT_AVAILABLE);
-  }
-};
-
-/**
- * If changing the typings of `getAndroidModule` to accommodate extra modules,
- * make sure to update `getAndroidModuleType`.
- */
-export const getAndroidModule = ():
-  | typeof RNIapModule
-  | typeof RNIapAmazonModule => {
-  checkNativeAndroidAvailable();
-
-  return androidNativeModule
-    ? androidNativeModule
-    : RNIapModule
-    ? RNIapModule
-    : RNIapAmazonModule;
-};
-
-/**
- * Returns whether the Android in-app-purchase code is using the Android,
- * Amazon, or another store.
- */
-export const getAndroidModuleType = (): 'android' | 'amazon' | null => {
-  const module = getAndroidModule();
-  switch (module) {
-    case RNIapModule:
-      return 'android';
-    case RNIapAmazonModule:
-      return 'amazon';
-    default:
-      return null;
-  }
-};
 
 export const getNativeModule = ():
   | typeof RNIapModule
-  | typeof RNIapAmazonModule
   | typeof RNIapIos
   | typeof RNIapIosSk2 => {
-  return isAndroid ? getAndroidModule() : getIosModule();
+  return getIosModule();
 };
 
 // iOS

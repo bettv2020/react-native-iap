@@ -1,10 +1,7 @@
 import {NativeModules, Platform} from 'react-native';
 
-import * as IapAmazon from './modules/amazon';
-import * as IapAndroid from './modules/android';
 import * as IapIos from './modules/ios';
 import * as IapIosSk2 from './modules/iosSk2';
-import {singleProductAndroidMap} from './types/android';
 import {offerToRecord} from './types/apple';
 import {
   offerSk2Map,
@@ -14,12 +11,8 @@ import {
   transactionSk2ToPurchaseMap,
 } from './types/appleSk2';
 import {
-  fillProductsWithAdditionalData,
-  getAndroidModule,
-  getAndroidModuleType,
   getIosModule,
   getNativeModule,
-  isAmazon,
   isIosStorekit2,
   storekit1Mode,
   storekit2Mode,
@@ -31,22 +24,17 @@ import {
   ProductType,
   Purchase,
   PurchaseResult,
-  PurchaseStateAndroid,
   RequestPurchase,
   RequestSubscription,
   Subscription,
-  SubscriptionAmazon,
-  SubscriptionAndroid,
   SubscriptionIOS,
   SubscriptionPlatform,
   SubscriptionPurchase,
 } from './types';
 
-export {IapAndroid, IapAmazon, IapIos, IapIosSk2, isIosStorekit2};
+export {IapIos, IapIosSk2, isIosStorekit2};
 
-const {RNIapIos, RNIapIosSk2, RNIapModule, RNIapAmazonModule} = NativeModules;
-const ANDROID_ITEM_TYPE_SUBSCRIPTION = ProductType.subs;
-const ANDROID_ITEM_TYPE_IAP = ProductType.inapp;
+const {RNIapIos, RNIapIosSk2} = NativeModules;
 
 /**
  * STOREKIT1_MODE: Will not enable Storekit 2 even if the device supports it. Thigs will work as before,
@@ -127,14 +115,6 @@ export const endConnection = (): Promise<boolean> =>
   getNativeModule().endConnection();
 
 /**
- * Consume all 'ghost' purchases (that is, pending payment that already failed but is still marked as pending in Play Store cache). Android only.
- * @returns {Promise<boolean>}
- */
-export const flushFailedPurchasesCachedAsPendingAndroid =
-  (): Promise<boolean> =>
-    getAndroidModule().flushFailedPurchasesCachedAsPending();
-
-/**
  * Get a list of products (consumable and non-consumable items, but not subscriptions)
  ## Usage
 
@@ -198,14 +178,7 @@ export const getProducts = ({
           items = (await RNIapIos.getItems(skus)) as Product[];
         }
         return items.filter((item: Product) => skus.includes(item.productId));
-      },
-      android: async () => {
-        const products = (
-          await getAndroidModule().getItemsByType(ANDROID_ITEM_TYPE_IAP, skus)
-        ).map(singleProductAndroidMap);
-
-        return fillProductsWithAdditionalData(products);
-      },
+      }
     }) || (() => Promise.reject(new Error('Unsupported Platform')))
   )();
 };
@@ -257,38 +230,6 @@ export const getSubscriptions = ({
 
         return addSubscriptionPlatform(items, SubscriptionPlatform.ios);
       },
-      android: async (): Promise<Subscription[]> => {
-        const androidPlatform = getAndroidModuleType();
-
-        let subscriptions = (await getAndroidModule().getItemsByType(
-          ANDROID_ITEM_TYPE_SUBSCRIPTION,
-          skus,
-        )) as SubscriptionAndroid[] | SubscriptionAmazon[];
-
-        switch (androidPlatform) {
-          case 'android': {
-            const castSubscriptions = subscriptions as SubscriptionAndroid[];
-            return addSubscriptionPlatform(
-              castSubscriptions,
-              SubscriptionPlatform.android,
-            );
-          }
-          case 'amazon':
-            let castSubscriptions = subscriptions as SubscriptionAmazon[];
-            castSubscriptions = await fillProductsWithAdditionalData(
-              castSubscriptions,
-            );
-            return addSubscriptionPlatform(
-              castSubscriptions,
-              SubscriptionPlatform.amazon,
-            );
-          case null:
-          default:
-            throw new Error(
-              `getSubscriptions received unknown platform ${androidPlatform}. Verify the logic in getAndroidModuleType`,
-            );
-        }
-      },
     }) || (() => Promise.reject(new Error('Unsupported Platform')))
   )();
 };
@@ -331,7 +272,7 @@ Note that this is only for backaward compatiblity. It won't publish to transacti
 @param {automaticallyFinishRestoredTransactions}:boolean. (IOS Sk1 only) When `true`, all the transactions that are returned are automatically
 finished. This means that if you call this method again you won't get the same result on the same device. On the other hand, if `false` you'd
 have to manually finish the returned transaction once you have delivered the content to your user.
-@param {onlyIncludeActiveItems}:boolean. (IOS Sk2 only). Defaults to false, meaning that it will return one transaction per item purchased. 
+@param {onlyIncludeActiveItems}:boolean. (IOS Sk2 only). Defaults to false, meaning that it will return one transaction per item purchased.
 @See https://developer.apple.com/documentation/storekit/transaction/3851204-currententitlements for details
  */
 export const getPurchaseHistory = ({
@@ -360,21 +301,6 @@ export const getPurchaseHistory = ({
             automaticallyFinishRestoredTransactions,
           );
         }
-      },
-      android: async () => {
-        if (RNIapAmazonModule) {
-          return await RNIapAmazonModule.getAvailableItems();
-        }
-
-        const products = await RNIapModule.getPurchaseHistoryByType(
-          ANDROID_ITEM_TYPE_IAP,
-        );
-
-        const subscriptions = await RNIapModule.getPurchaseHistoryByType(
-          ANDROID_ITEM_TYPE_SUBSCRIPTION,
-        );
-
-        return products.concat(subscriptions);
       },
     }) || (() => Promise.resolve([]))
   )();
@@ -457,7 +383,7 @@ const App = () => {
 ```
 @param {alsoPublishToEventListener}:boolean When `true`, every element will also be pushed to the purchaseUpdated listener.
 Note that this is only for backaward compatiblity. It won't publish to transactionUpdated (Storekit2) Defaults to `false`
-@param {onlyIncludeActiveItems}:boolean. (IOS Sk2 only). Defaults to true, meaning that it will return the transaction if suscription has not expired. 
+@param {onlyIncludeActiveItems}:boolean. (IOS Sk2 only). Defaults to true, meaning that it will return the transaction if suscription has not expired.
 @See https://developer.apple.com/documentation/storekit/transaction/3851204-currententitlements for details
  *
  */
@@ -487,21 +413,6 @@ export const getAvailablePurchases = ({
             automaticallyFinishRestoredTransactions,
           );
         }
-      },
-      android: async () => {
-        if (RNIapAmazonModule) {
-          return await RNIapAmazonModule.getAvailableItems();
-        }
-
-        const products = await RNIapModule.getAvailableItemsByType(
-          ANDROID_ITEM_TYPE_IAP,
-        );
-
-        const subscriptions = await RNIapModule.getAvailableItemsByType(
-          ANDROID_ITEM_TYPE_SUBSCRIPTION,
-        );
-
-        return products.concat(subscriptions);
       },
     }) || (() => Promise.resolve([]))
   )();
@@ -617,36 +528,6 @@ export const requestPurchase = (
             appAccountToken,
             quantity ?? -1,
             offerToRecord(withOffer),
-          );
-        }
-      },
-      android: async () => {
-        if (isAmazon) {
-          if (!('sku' in request)) {
-            throw new Error('sku is required for Amazon purchase');
-          }
-          const {sku} = request;
-          return RNIapAmazonModule.buyItemByType(sku);
-        } else {
-          if (!('skus' in request) || !request.skus.length) {
-            throw new Error('skus is required for Android purchase');
-          }
-
-          const {
-            skus,
-            obfuscatedAccountIdAndroid,
-            obfuscatedProfileIdAndroid,
-            isOfferPersonalized,
-          } = request;
-          return getAndroidModule().buyItemByType(
-            ANDROID_ITEM_TYPE_IAP,
-            skus,
-            undefined,
-            -1,
-            obfuscatedAccountIdAndroid,
-            obfuscatedProfileIdAndroid,
-            [],
-            isOfferPersonalized ?? false,
           );
         }
       },
@@ -777,44 +658,6 @@ export const requestSubscription = (
           );
         }
       },
-      android: async () => {
-        if (isAmazon) {
-          if (!('sku' in request)) {
-            throw new Error('sku is required for Amazon subscriptions');
-          }
-          const {sku} = request;
-          return RNIapAmazonModule.buyItemByType(sku);
-        } else {
-          if (
-            !('subscriptionOffers' in request) ||
-            request.subscriptionOffers.length === 0
-          ) {
-            throw new Error(
-              'subscriptionOffers are required for Google Play subscriptions',
-            );
-          }
-
-          const {
-            subscriptionOffers,
-            purchaseTokenAndroid,
-            prorationModeAndroid = -1,
-            obfuscatedAccountIdAndroid,
-            obfuscatedProfileIdAndroid,
-            isOfferPersonalized,
-          } = request;
-
-          return RNIapModule.buyItemByType(
-            ANDROID_ITEM_TYPE_SUBSCRIPTION,
-            subscriptionOffers?.map((so) => so.sku),
-            purchaseTokenAndroid,
-            prorationModeAndroid,
-            obfuscatedAccountIdAndroid,
-            obfuscatedProfileIdAndroid,
-            subscriptionOffers?.map((so) => so.offerToken),
-            isOfferPersonalized ?? false,
-          );
-        }
-      },
     }) || (() => Promise.resolve(null))
   )();
 
@@ -845,12 +688,9 @@ const App = () => {
  */
 export const finishTransaction = ({
   purchase,
-  isConsumable,
-  developerPayloadAndroid,
 }: {
   purchase: Purchase;
   isConsumable?: boolean;
-  developerPayloadAndroid?: string;
 }): Promise<PurchaseResult | boolean> => {
   return (
     Platform.select({
@@ -865,32 +705,6 @@ export const finishTransaction = ({
         await getIosModule().finishTransaction(transactionId);
         return Promise.resolve(true);
       },
-      android: async () => {
-        if (purchase?.purchaseToken) {
-          if (isConsumable) {
-            return getAndroidModule().consumeProduct(
-              purchase.purchaseToken,
-              developerPayloadAndroid,
-            );
-          } else if (
-            purchase.userIdAmazon ||
-            (!purchase.isAcknowledgedAndroid &&
-              purchase.purchaseStateAndroid === PurchaseStateAndroid.PURCHASED)
-          ) {
-            return getAndroidModule().acknowledgePurchase(
-              purchase.purchaseToken,
-              developerPayloadAndroid,
-            );
-          } else {
-            return Promise.reject(
-              new Error('purchase is not suitable to be purchased'),
-            );
-          }
-        }
-        return Promise.reject(
-          new Error('purchase is not suitable to be purchased'),
-        );
-      },
     }) || (() => Promise.reject(new Error('Unsupported Platform')))
   )();
 };
@@ -900,29 +714,13 @@ export const finishTransaction = ({
  *
  */
 export const deepLinkToSubscriptions = ({
-  sku,
-  isAmazonDevice = true,
 }: {
   sku?: string;
-  isAmazonDevice?: boolean;
 }): Promise<void> => {
   return (
     Platform.select({
       ios: async () => {
         IapIos.deepLinkToSubscriptionsIos();
-      },
-      android: async () => {
-        if (isAmazon) {
-          IapAmazon.deepLinkToSubscriptionsAmazon({isAmazonDevice});
-        } else if (sku) {
-          IapAndroid.deepLinkToSubscriptionsAndroid({sku});
-        } else {
-          Promise.reject(
-            new Error(
-              'Sku is required to locate subscription in Android Store',
-            ),
-          );
-        }
       },
     }) || (() => Promise.reject(new Error('Unsupported Platform')))
   )();
